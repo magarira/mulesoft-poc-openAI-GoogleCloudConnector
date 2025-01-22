@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:asana="http://www.mulesoft.org/schema/mule/asana" xmlns:chatgpt="http://www.mulesoft.org/schema/mule/chatgpt"
+	xmlns:snowflake="http://www.mulesoft.org/schema/mule/snowflake"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:sfdc-marketing-cloud="http://www.mulesoft.org/schema/mule/sfdc-marketing-cloud" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/sfdc-marketing-cloud http://www.mulesoft.org/schema/mule/sfdc-marketing-cloud/current/mule-sfdc-marketing-cloud.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/snowflake http://www.mulesoft.org/schema/mule/snowflake/current/mule-snowflake.xsd
+http://www.mulesoft.org/schema/mule/chatgpt http://www.mulesoft.org/schema/mule/chatgpt/current/mule-chatgpt.xsd
+http://www.mulesoft.org/schema/mule/asana http://www.mulesoft.org/schema/mule/asana/current/mule-asana.xsd">
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="a8a60ac6-5ed4-4c25-a6dc-10debb6c59b7" >
+		<http:request-connection protocol="HTTPS" host="api.openai.com" port="443" />
+	</http:request-config>
+	<flow name="poc-openAI-text-completionFlow" doc:id="4a3ae0be-a9b5-4ac5-90b9-f6ff314ec9af" >
+		<http:listener doc:name="Listener" doc:id="eb1c23ea-8cbe-4e72-bc19-d2a6f665af93" path="/text-completion" config-ref="HTTP_Listener_config">
+			<http:response statusCode="#[200]" />
+			<http:error-response statusCode='#[vars.httpStatus default "500"]' >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="appName, flow variables" doc:id="0f8c6e80-0769-4f8e-80e6-bc4360f6094c">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="apiName"><![CDATA[p('app.name')]]></ee:set-variable>
+				<ee:set-variable variableName="flow"><![CDATA[attributes.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger Flow started" doc:id="3aefd83e-7304-49c0-8d18-cb08c329294b" message='#["\nFlow started : "]#[vars.flow]#["\n"]' />
+		<chatgpt:chat doc:name="Chat" doc:id="dfc929b7-cd25-40f3-a12d-8c18d58ba466" config-ref="ChatGPT_Config" chatGptVersion="gpt-4o-mini">
+			<chatgpt:current-message ><![CDATA[#[output application/json
+---
+{
+	"content" : attributes.queryParams.query
+}]]]></chatgpt:current-message>
+		</chatgpt:chat>
+		<choice doc:name="Choice" doc:id="1b5d1ce3-bda9-467d-b28e-8ff08c47556f" >
+			<when expression="#[attributes.statusCode != 200]">
+				<raise-error doc:name="Raise error" doc:id="994ac806-a140-4191-ac90-00e1aa7a7c88" type="ERROR_USER:CHATGPT_TEXT_COMPLETION" description="#[attributes.reasonPhrase]"/>
+			</when>
+		</choice>
+		<set-payload value="#[%dw 2.0&#10;output text/plain&#10;---&#10;payload.choices[0].message.content  replace '.' with '.\n']" doc:name="Set Payload" doc:id="fd1566b7-4b24-45bf-828d-5d7c96b19db3" />
+		<logger level="INFO" doc:name="Logger Flow ended" doc:id="b3ed2ec3-6021-47ed-9f60-fe2d695c1416" message='#["\nFlow ended : "]#[vars.flow]#["\n"]' />
+		<error-handler ref="global-error-handler" />
+	</flow>
+	<flow name="poc-openAI-text-completion2Flow" doc:id="8337d43d-1445-4321-adc4-09e9948d2aa5" >
+		<http:listener doc:name="Listener" doc:id="1b69dca4-789f-4681-857e-36e78152af19" config-ref="HTTP_Listener_config" path="/text-completion2">
+			<http:response statusCode="200" />
+			<http:error-response statusCode='#[vars.httpStatus default "500"]' >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="appName, flow variables" doc:id="7f798ea6-1cca-4ac4-8b95-da418814916b">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="apiName"><![CDATA[p('app.name')]]></ee:set-variable>
+				<ee:set-variable variableName="flow"><![CDATA[attributes.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger Flow started" doc:id="f35e1cf8-94c4-40d5-af53-f649614ea12f" message='#["\nFlow started : "]#[vars.flow]#["\n"]' />
+		<ee:transform doc:name="Transform Message" doc:id="790a8b48-d72e-4790-9b5b-0775e63d4916" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "model": "gpt-4o-mini",
+    "messages": [
+      {
+        "role": "developer",
+        "content": "You are a helpful assistant."
+      },
+      {
+        "role": "user",
+        "content": attributes.queryParams.query
+      }
+    ]
+  }]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="POST" doc:name="Request text completions" doc:id="2d9bab41-3c35-45bd-9d0e-2ee90841ad45" config-ref="HTTP_Request_configuration_OpenAI" path="/v1/chat/completions" responseTimeout="120000">
+			<http:headers ><![CDATA[#[{
+	"Content-Type"	: "application/json",
+    "Authorization"	: "Bearer " ++ p('secure::openAI.APIKey')
+}]]]></http:headers>
+		</http:request>
+		<set-payload value="#[%dw 2.0&#10;output text/plain&#10;---&#10;payload.choices[0].message.content replace '.' with '.\n']" doc:name="Set Payload" doc:id="eaa6be23-8382-4b8f-8aba-9f51c8e9eb98" />
+		<logger level="INFO" doc:name="Logger Flow ended" doc:id="ea8a1beb-2c59-4ede-8b64-aad3703a68fc" message='#["\nFlow ended : "]#[vars.flow]#["\n"]' />
+		<error-handler ref="global-error-handler" />
+	</flow>
+	<flow name="poc-openAI-text-to-speechFlow" doc:id="8f389110-b9c6-4fa2-9b0d-10df551a55dd" >
+		<http:listener doc:name="Listener" doc:id="b159b2c0-9fb2-4157-ae0f-65c91c784c42" config-ref="HTTP_Listener_config" path="/text-to-speech" >
+			<http:response statusCode="200" />
+			<http:error-response statusCode='#[vars.httpStatus default "500"]' >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="appName, flow variables" doc:id="b39913a9-19d5-46e0-963c-bb66d658d8da" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="apiName" ><![CDATA[p('app.name')]]></ee:set-variable>
+				<ee:set-variable variableName="flow" ><![CDATA[attributes.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger Flow started" doc:id="73fc8919-a9ab-40db-9192-e5da5aeaa6f6" message='#["\nFlow started : "]#[vars.flow]#["\n"]' />
+		<ee:transform doc:name="Transform Message" doc:id="9028e0f9-62c8-4e49-a156-6b13d333f4aa" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<try doc:name="Try" doc:id="9e0edd5d-eea0-4843-9d3b-741d434fd26a" >
+			<http:request method="POST" doc:name="Request text-to-speech" doc:id="57833f03-5aa5-4e58-bd3c-12c17cc5d1f1" config-ref="HTTP_Request_configuration_OpenAI" path="/v1/audio/speech" >
+				<http:headers ><![CDATA[#[{
+	"Content-Type"	: "application/json",
+    "Authorization"	: "Bearer " ++ p('secure::openAI.APIKey')
+}]]]></http:headers>
+			</http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="5d91e907-59e0-4311-8b8a-24faa2091a76" >
+					<set-variable value="#[error.muleMessage.typedValue.error.message]" doc:name="errorDescription" doc:id="a2a717dd-290b-4a41-a2c1-425a64e8df1a" variableName="errorDescription" />
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<set-payload value="#[payload]" doc:name="Set Payload" doc:id="2c554918-a366-4088-a562-94b8b2729a23" />
+		<logger level="INFO" doc:name="Logger Flow ended" doc:id="ffdda545-5683-4dad-b05d-46aedd4820ec" message='#["\nFlow ended : "]#[vars.flow]#["\n"]' />
+		<error-handler ref="global-error-handler" />
+	</flow>
+	<flow name="poc-openAI-speech-to-textFlow" doc:id="cc70fa88-881c-4c41-a1d7-807fc46b611a" >
+		<http:listener doc:name="Listener" doc:id="419fccfe-d5b3-496c-b266-5caba0c15b78" config-ref="HTTP_Listener_config" path="/speech-to-text" >
+			<http:response statusCode="200" />
+			<http:error-response statusCode='#[vars.httpStatus default "500"]' >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="appName, flow variables" doc:id="1caf2f5e-a627-48a0-8e56-c0dbebc07e29" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="apiName" ><![CDATA[p('app.name')]]></ee:set-variable>
+				<ee:set-variable variableName="flow" ><![CDATA[attributes.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger Flow started" doc:id="e6347064-4758-4f68-a9d9-05bbe529efab" message='#["\nFlow started : "]#[vars.flow]#["\n"]' />
+		<ee:transform doc:name="inputFileMultipartInfo" doc:id="5d9050f4-d500-490a-bb29-5ef0a2910b47">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="inputFileMultipartInfo"><![CDATA[output application/json
+import toBase64 from dw::core::Binaries
+---
+({
+	"documents" : 
+		payload.parts.*documents map((value,index) -> {
+			
+				"nombre"	 : value.headers."Content-Disposition".filename,
+				"longitud": {
+					"size-bytes" : sizeOf(value.content) ,
+					"size-Kilobytes" : (sizeOf(value.content) / 1024) ,
+					"size-Megabytes" : ((sizeOf(value.content)  / 1024) /1024) 
+				},
+				"content" : toBase64(value.content),
+			
+		})
+}) as Object]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger inputFileMultipartInfo" doc:id="2ce2ae87-c1e6-4192-ae0f-e0e526f00aad" message="#[vars.inputFileMultipartInfo]" />
+		<ee:transform doc:name="Input speech to text OPEN AI" doc:id="b429d96f-d148-4948-8a36-3a67f1ffbdeb" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+import * from dw::core::Binaries
+---
+{
+    "model": "whisper-1",
+	"file" : vars.inputFileMultipartInfo.documents[0].content,
+    "response_format" : "json"    
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<try doc:name="Try speech to text OPEN AI" doc:id="8101d071-09e2-411c-96ae-9fd6baaaf772" >
+			<http:request method="POST" doc:name="Request speech-to-text" doc:id="ee35a6a0-14ef-4782-8a84-22d62f5b5558" config-ref="HTTP_Request_configuration_OpenAI" path="/v1/audio/transcriptions" >
+				<http:headers ><![CDATA[#[{
+	"Authorization"	: "Bearer " ++ p('secure::openAI.APIKey')
+}]]]></http:headers>
+			</http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="845e7d95-af12-44cd-8354-02499aeb1f35" >
+					<set-variable value="#[error.muleMessage.typedValue.error.message]" doc:name="errorDescription" doc:id="e1589c3f-9d43-4571-ab78-bd305bab0a0c" variableName="errorDescription" />
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<set-payload doc:name="Set Payload" doc:id="6edeb976-adb2-417c-9f4b-1fd74f8454e6" value="#[vars.inputFileMultipartInfo]"/>
+		<logger level="INFO" doc:name="Logger Flow ended" doc:id="b05e0501-0abc-481a-9146-0c2d2220012b" message='#["\nFlow ended : "]#[vars.flow]#["\n"]' />
+		<error-handler ref="global-error-handler" />
+	</flow>
+	<flow name="poc-googleCloud-text-to-speechFlow" doc:id="2f91fa05-238e-467e-b90f-0898c1f95a8b" >
+		<http:listener doc:name="Listener" doc:id="2bf35f3d-4eca-4bbf-aa21-a96808bf1e65" config-ref="HTTP_Listener_config" path="/googlecloud-text-to-speech" >
+			<http:response statusCode="200" />
+			<http:error-response statusCode='#[vars.httpStatus default "500"]' >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="appName, flow variables" doc:id="694c90f1-4a1c-4c42-89df-33f229353dee" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="apiName" ><![CDATA[p('app.name')]]></ee:set-variable>
+				<ee:set-variable variableName="flow" ><![CDATA[attributes.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger Flow started" doc:id="d702ce6e-beae-43df-b244-924d541a992e" message='#["\nFlow started : "]#[vars.flow]#["\n"]' />
+		<ee:transform doc:name="Transform Message" doc:id="83e30b82-77f5-44c2-948f-984c8ae95118" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<try doc:name="Try" doc:id="54bf5427-1c91-4eb6-890d-4297bc8fa75c" >
+			<http:request method="POST" doc:name="Request text-to-speech" doc:id="76094a7b-cdc3-4e47-a97c-41dacb47163d" config-ref="HTTP_Request_configuration_GoogleCloudTextToSpeech" path="/v1beta1/text:synthesize" >
+				<http:headers ><![CDATA[#[{
+	"Content-Type"	: "application/json"
+}]]]></http:headers>
+				<http:query-params ><![CDATA[#[output application/json
+---
+{
+	"key" : attributes.queryParams."key"
+}]]]></http:query-params>
+			</http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="da3d6b56-7b08-42bd-b145-74238c072a98" >
+					<set-variable value="#[if(error.muleMessage.typedValue.error.message?)(error.muleMessage.typedValue.error.message)else(error.description)]" doc:name="errorDescription" doc:id="c4dd740c-bb7a-46c6-bbda-1db8a2dbfb4d" variableName="errorDescription" />
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<!-- [STUDIO:"Logger"]<logger level="INFO" doc:name="Logger" doc:id="5b544a31-2340-48b3-8a23-bb4e0a17f824" message='#[payload - "audioContent"&#93;'/> [STUDIO] -->
+		<set-payload value="#[output text/plain&#10;---&#10;&quot;&lt;!DOCTYPE html&gt;&quot; ++&#10;&quot;&lt;html&gt;&quot;++&#10;&quot;	&lt;head&gt;&quot; ++&#10;&quot;	&lt;/head&gt;&quot; ++ &#10;&quot;	&lt;body&gt;&quot; ++&#10;&quot;		&lt;audio controls='controls'  &gt;&quot; ++&#10;&quot;    		&lt;source src='data:audio/mpeg;base64,&quot; ++ payload.audioContent ++ &quot;' type='audio/mpeg' /&gt;&quot; ++&#10;&quot;		&lt;/audio&gt;&quot; ++ &#10;&quot;	&lt;/body&gt;&quot; ++&#10;&quot;&lt;/html&gt;&quot;]" doc:name="Set Payload" doc:id="1d28a91c-d7e1-43e2-9bb1-b9c961f4f078" />
+		<logger level="INFO" doc:name="Logger Flow ended" doc:id="4a904aae-6d81-4c3f-9b12-2fb7b774c203" message='#["\nFlow ended : "]#[vars.flow]#["\n"]' />
+		<error-handler ref="global-error-handler" />
+	</flow>
+	<flow name="poc-googleCloud-speech-to-textFlow" doc:id="85983e0e-f90f-4aed-957c-633308b00daf" >
+		<http:listener doc:name="Listener" doc:id="8788e892-2cd5-4ae5-9a38-327e2cc98c62" config-ref="HTTP_Listener_config" path="/googlecloud-speech-to-text" >
+			<http:response statusCode="200" />
+			<http:error-response statusCode='#[vars.httpStatus default "500"]' >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="appName, flow variables" doc:id="f324cc01-9bb2-4a3a-bae3-6ef9b29e5876" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="apiName" ><![CDATA[p('app.name')]]></ee:set-variable>
+				<ee:set-variable variableName="flow" ><![CDATA[attributes.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger Flow started" doc:id="0d20f6ab-29fd-476e-bce9-5b45157cd66e" message='#["\nFlow started : "]#[vars.flow]#["\n"]' />
+		<ee:transform doc:name="Transform Message" doc:id="55a4fc6f-bcdd-44f9-b673-2b3d5141b602" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<try doc:name="Try" doc:id="71853b9d-e182-473c-93cc-6a2fb7c11416" >
+			<http:request method="POST" doc:name="Request speech-to-text" doc:id="cd7bba63-0d6e-4b84-9b91-6da980ebbd38" config-ref="HTTP_Request_configuration_GoogleCloud_speechToText" path="/v1/speech:recognize" responseTimeout="120000">
+				<http:headers ><![CDATA[#[{
+	"Content-Type"	: "application/json"
+}]]]></http:headers>
+				<http:query-params ><![CDATA[#[output application/json
+---
+{
+	"key" : attributes.queryParams."key"
+}]]]></http:query-params>
+			</http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="da7e87a1-51c1-4ad9-b1cc-a84f12e3980f" type="ANY">
+					<set-variable value="#[output text/plain&#10;---&#10;if(error.muleMessage.typedValue.error.message?)(error.muleMessage.typedValue.error.message)else(error.description)]" doc:name="errorDescription" doc:id="1322aeb9-bab3-4618-8bc7-fbaf6bdaf5a5" variableName="errorDescription" />
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<set-payload value="#[payload]" doc:name="Set Payload" doc:id="05a3519a-948d-4d20-8fb5-4f23c4c41215" />
+		<logger level="INFO" doc:name="Logger Flow ended" doc:id="617b65a2-d13d-45c8-8638-d4d4bd1fa7e3" message='#["\nFlow ended : "]#[vars.flow]#["\n"]' />
+		<error-handler ref="global-error-handler" />
+	</flow>
+	<flow name="poc-googleCloud-detectLanguageFlow" doc:id="e615ab76-9c27-47f4-ad76-2a3baa259bff" >
+		<http:listener doc:name="Listener" doc:id="716dde97-746b-428b-b402-aed1c52a4c8f" config-ref="HTTP_Listener_config" path="/googlecloud-detectLanguage" >
+			<http:response statusCode="200" />
+			<http:error-response statusCode='#[vars.httpStatus default "500"]' >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="appName, flow variables" doc:id="0926397e-7846-4342-bb8e-f3b708340168" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="apiName" ><![CDATA[p('app.name')]]></ee:set-variable>
+				<ee:set-variable variableName="flow" ><![CDATA[attributes.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger Flow started" doc:id="98da4c32-e22f-4550-975d-c319e750e516" message='#["\nFlow started : "]#[vars.flow]#["\n"]' />
+		<ee:transform doc:name="Transform Message" doc:id="e0f11565-a7cb-4ce4-8a46-ab7f4c371f7b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<try doc:name="Try" doc:id="65c57e71-32e7-46d8-8d77-d6b0d12f8f79" >
+			<http:request method="POST" doc:name="Request detectLanguage" doc:id="fe6cfc46-177c-46c8-a089-12820183db40" config-ref="HTTP_Request_configuration_GoogleCloud_detectLanguage" path="/language/translate/v2/detect" responseTimeout="120000" >
+				<http:headers ><![CDATA[#[{
+	"Content-Type"	: "application/json"
+}]]]></http:headers>
+				<http:query-params ><![CDATA[#[output application/json
+---
+{
+	"key" : attributes.queryParams."key"
+}]]]></http:query-params>
+			</http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="50528f4c-63a4-4480-a91a-c6f137f73299" type="ANY" >
+					<set-variable value="#[output text/plain&#10;---&#10;if(error.muleMessage.typedValue.error.message?)(error.muleMessage.typedValue.error.message)else(error.description)]" doc:name="errorDescription" doc:id="17e008e7-3a78-4a89-8057-ab934d85c629" variableName="errorDescription" />
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<set-payload value="#[payload]" doc:name="Set Payload" doc:id="de6ae3c2-6ebc-455d-9366-5dad7e1a7f5b" />
+		<logger level="INFO" doc:name="Logger Flow ended" doc:id="cfe3e0f6-d643-4434-bf23-ea0b8a4d56ec" message='#["\nFlow ended : "]#[vars.flow]#["\n"]' />
+	</flow>
+	<flow name="poc-googleCloud-translateTextFlow" doc:id="3bd52cb0-d8f8-4613-a067-72b8916f3ec0" >
+		<http:listener doc:name="Listener" doc:id="fa4f98f8-4609-45e6-96f3-d36a6b73c58e" config-ref="HTTP_Listener_config" path="/googlecloud-translateText" >
+			<http:response statusCode="200" />
+			<http:error-response statusCode='#[vars.httpStatus default "500"]' >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<ee:transform doc:name="appName, flow variables" doc:id="41a05318-8510-4ed5-9849-c06229e8e419" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="apiName" ><![CDATA[p('app.name')]]></ee:set-variable>
+				<ee:set-variable variableName="flow" ><![CDATA[attributes.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger Flow started" doc:id="8adea8a3-1c83-4af5-a72d-548f8464aa8e" message='#["\nFlow started : "]#[vars.flow]#["\n"]' />
+		<ee:transform doc:name="Transform Message" doc:id="abf87576-a07f-4507-a28e-70b0f0471a1e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<try doc:name="Try" doc:id="02397938-b0d0-4425-9b4a-afd87c022f21" >
+			<http:request method="POST" doc:name="Request translateText" doc:id="9cdd8cb5-3e25-4fa9-a71d-df35a560a019" config-ref="HTTP_Request_configuration_GoogleCloud_detectLanguage" path="/language/translate/v2" responseTimeout="120000" >
+				<http:headers ><![CDATA[#[{
+	"Content-Type"	: "application/json"
+}]]]></http:headers>
+				<http:query-params ><![CDATA[#[output application/json
+---
+{
+	"key" : attributes.queryParams."key"
+}]]]></http:query-params>
+			</http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="a04d45d2-ac37-4cac-8e76-e4fc32fea107" type="ANY" >
+					<set-variable value="#[output text/plain&#10;---&#10;if(error.muleMessage.typedValue.error.message?)(error.muleMessage.typedValue.error.message)else(error.description)]" doc:name="errorDescription" doc:id="d3b1fa2b-82a5-4f36-ac76-36d1bd54bac0" variableName="errorDescription" />
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<set-payload value="#[payload]" doc:name="Set Payload" doc:id="2fe6e5be-3df2-4264-9b98-d98194878a6c" />
+		<logger level="INFO" doc:name="Logger Flow ended" doc:id="35d51979-619c-4291-897e-9d276eb7c899" message='#["\nFlow ended : "]#[vars.flow]#["\n"]' />
+	</flow>
+</mule>
